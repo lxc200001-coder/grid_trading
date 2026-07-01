@@ -63,6 +63,7 @@ class FillDrivenGrid:
 
         # ---------- 可调参数 ----------
         self.初始基准价       = cfg.get("base_price", 0)
+        self.按价格or按比例   = cfg.get("price_mode", 0)      # 0: 按价格  1: 按比例
         self.股价每跌多少买入 = cfg.get("buy_step_price", 2.5)
         self.股价每涨多少卖出 = cfg.get("sell_step_price", 2.5)
         self.每笔委托股数     = cfg.get("qty_per_level", 100)
@@ -157,9 +158,19 @@ class FillDrivenGrid:
             errors.append(f"策略最大持仓股数需 >= 每笔委托股数 {self.每笔委托股数}")
         if self.初始持仓 < 0:
             errors.append(f"{self.驱动标的1} 初始持仓不能为空仓")
+        if self.按价格or按比例 not in (0, 1):
+            errors.append("按价格or按比例: 0=按价格, 1=按比例")
+        if self.按价格or按比例 == 1:
+            if not (0 < self.股价每跌多少买入 < 1):
+                errors.append("按比例模式: 买入比例需在 0~1 之间 (如 0.02 = 2%)")
+            if not (0 < self.股价每涨多少卖出 < 1):
+                errors.append("按比例模式: 卖出比例需在 0~1 之间 (如 0.02 = 2%)")
 
         # 首层价格检查: 初始 BUY 价 <= 当前价
-        buy_price = self.初始基准价 - self.股价每跌多少买入
+        if self.按价格or按比例 == 0:
+            buy_price = self.初始基准价 - self.股价每跌多少买入
+        else:
+            buy_price = self.初始基准价 * (1 - self.股价每跌多少买入)
         current_price = self._get_current_price()
         if buy_price > current_price:
             errors.append(
@@ -183,11 +194,15 @@ class FillDrivenGrid:
     def _place_pair(self, base_price: float):
         """
         以 base_price 为基准, 挂 1 对订单:
-          BUY  @ base_price - buy_step
-          SELL @ base_price + sell_step
+          按价格 (price_mode=0): BUY = base - step, SELL = base + step
+          按比例 (price_mode=1): BUY = base * (1 - step%), SELL = base * (1 + step%)
         """
-        buy_price = self.round(base_price - self.股价每跌多少买入)
-        sell_price = self.round(base_price + self.股价每涨多少卖出)
+        if self.按价格or按比例 == 0:
+            buy_price = self.round(base_price - self.股价每跌多少买入)
+            sell_price = self.round(base_price + self.股价每涨多少卖出)
+        else:
+            buy_price = self.round(base_price * (1 - self.股价每跌多少买入))
+            sell_price = self.round(base_price * (1 + self.股价每涨多少卖出))
 
         # 先清除旧的对价记录
         self.open_order_dict.clear()
