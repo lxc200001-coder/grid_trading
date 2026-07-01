@@ -106,7 +106,7 @@ class FillDrivenGrid:
                 if status not in _cannot_cancel_status:
                     try:
                         self.ib.cancelOrder(order_id)
-                        logger.info(f"  🗑 已撤单 orderId={order_id}")
+                        logger.info(f"  [CANCEL] 已撤单 orderId={order_id}")
                     except Exception as e:
                         logger.warning(f"撤单失败 orderId={order_id}: {e}")
 
@@ -116,7 +116,7 @@ class FillDrivenGrid:
                 cancel_order_in_dict(self.open_order_dict[price_key])
             for price_key in list(self.close_order_dict.keys()):
                 cancel_order_in_dict(self.close_order_dict[price_key])
-            logger.warning("⛔ 策略已停止，所有挂单已撤销")
+            logger.warning("[BOUND] 策略已停止，所有挂单已撤销")
             self.running = False
             self.stop()
 
@@ -133,7 +133,7 @@ class FillDrivenGrid:
         self._build_grid()
 
         # ---------- 启动日志 ----------
-        logger.info(f"📊 网格 {self._layer_count} 层: "
+        logger.info(f"[CHART] 网格 {self._layer_count} 层: "
                      f"{self.layer_prices[0]:.2f} ~ {self.layer_prices[-1]:.2f}")
 
     # ---------------------------------------------------------------
@@ -183,7 +183,7 @@ class FillDrivenGrid:
 
         for cond, msg in checks:
             if cond:
-                logger.error(f"❌ {msg}")
+                logger.error(f"[ERR] {msg}")
                 self.cancel_strategy_orders_and_quit_function()
                 return
 
@@ -194,7 +194,7 @@ class FillDrivenGrid:
         _current_price = self._get_current_price()
         if _first_layer_price > _current_price:
             logger.error(
-                f"❌ 首层挂单价 {_first_layer_price:.2f} 需 ≤ 当前价 {_current_price:.2f}"
+                f"[ERR] 首层挂单价 {_first_layer_price:.2f} 需 ≤ 当前价 {_current_price:.2f}"
                 f"，请调整初始基准价或开仓网格宽度"
             )
             self.cancel_strategy_orders_and_quit_function()
@@ -204,7 +204,7 @@ class FillDrivenGrid:
         buying_power = self._get_buying_power()
         if buying_power is not None and max_need > buying_power:
             logger.error(
-                f"❌ 所需购买力 {max_need} 股 > 最大购买力 {buying_power} 股"
+                f"[ERR] 所需购买力 {max_need} 股 > 最大购买力 {buying_power} 股"
                 f"，请减少最大持仓股数或提升购买力"
             )
             self.cancel_strategy_orders_and_quit_function()
@@ -233,8 +233,8 @@ class FillDrivenGrid:
 
         # 打印网格
         price_str = ", ".join(str(p) for p in prices)
-        logger.info(f"📋 买入层: {price_str}")
-        logger.info(f"📋 策略将在各层挂单 {self.每笔委托股数} 股, "
+        logger.info(f"[INFO] 买入层: {price_str}")
+        logger.info(f"[INFO] 策略将在各层挂单 {self.每笔委托股数} 股, "
                      f"最大持仓 {self._max_holding_position} 股")
 
     # ---------------------------------------------------------------
@@ -318,7 +318,7 @@ class FillDrivenGrid:
         }
 
         if self.cfg["dry_run"]:
-            logger.info(f"  🧪 [{action}] {qty}股 @ {price:.2f} "
+            logger.info(f"  [DRY] [{action}] {qty}股 @ {price:.2f} "
                          f"{'[开]' if is_open else '[平]'}")
             order_rec["ib_order_id"] = 0
             db_id = self.db.save_order(order_rec)
@@ -350,7 +350,7 @@ class FillDrivenGrid:
             t, price, action, is_open, db_id,
         )
 
-        logger.info(f"  📤 [{action}] {qty}股 @ {price:.2f} "
+        logger.info(f"  [SEND] [{action}] {qty}股 @ {price:.2f} "
                      f"(orderId={trade.order.orderId})")
         return db_id
 
@@ -364,7 +364,7 @@ class FillDrivenGrid:
         exec_ = fill.execution
         qty = int(exec_.shares)
 
-        logger.info(f"💹 成交: {exec_.side} {qty}股 @ {exec_.price:.2f}")
+        logger.info(f"[FILL] 成交: {exec_.side} {qty}股 @ {exec_.price:.2f}")
 
         # 1. 更新 DB
         self.db.save_fill({
@@ -416,10 +416,10 @@ class FillDrivenGrid:
                 sell_price = self.round(filled_price * (1 + self.股价每涨多少卖出))
 
             if sell_price not in self.close_order_dict:
-                logger.info(f"  🔄 BUY成交 → 挂SELL @ {sell_price:.2f} 锁利")
+                logger.info(f"  [REB] BUY成交 → 挂SELL @ {sell_price:.2f} 锁利")
                 self._place_order(sell_price, "SELL", is_open=False)
             else:
-                logger.info(f"  ⏭ SELL@{sell_price:.2f} 已有挂单, 跳过")
+                logger.info(f"  [SKIP] SELL@{sell_price:.2f} 已有挂单, 跳过")
         else:
             # 卖单成交 → 找对应的买入价
             if self.按价格or按比例 == 0:
@@ -428,10 +428,10 @@ class FillDrivenGrid:
                 buy_price = self.round(filled_price * (1 - self.股价每跌多少买入))
 
             if buy_price not in self.open_order_dict:
-                logger.info(f"  🔄 SELL成交 → 挂BUY @ {buy_price:.2f} 接回")
+                logger.info(f"  [REB] SELL成交 → 挂BUY @ {buy_price:.2f} 接回")
                 self._place_order(buy_price, "BUY", is_open=True)
             else:
-                logger.info(f"  ⏭ BUY@{buy_price:.2f} 已有挂单, 跳过")
+                logger.info(f"  [SKIP] BUY@{buy_price:.2f} 已有挂单, 跳过")
 
     # ---------------------------------------------------------------
     #  部署
@@ -443,7 +443,7 @@ class FillDrivenGrid:
         for i, price in enumerate(self.layer_prices):
             self._place_order(price, "BUY", layer_idx=i, is_open=True)
 
-        logger.info(f"🚀 网格已部署: {self.place_open_qty} 层待成交")
+        logger.info(f"[DPLY] 网格已部署: {self.place_open_qty} 层待成交")
 
     # ---------------------------------------------------------------
     #  定时任务
@@ -487,7 +487,7 @@ class FillDrivenGrid:
         """主事件循环"""
         self.running = True
         self.deploy()
-        logger.info("⏳ 成交驱动网格运行中 (Ctrl+C 停止)...")
+        logger.info("[WAIT] 成交驱动网格运行中 (Ctrl+C 停止)...")
 
         snapshot_interval = self.cfg.get("snapshot_interval_s", 5)
         equity_interval   = self.cfg.get("equity_interval_s", 60)
@@ -512,7 +512,7 @@ class FillDrivenGrid:
             except KeyboardInterrupt:
                 break
             except Exception as e:
-                logger.exception(f"💥 异常: {e}")
+                logger.exception(f"[EXCEPT] 异常: {e}")
                 time.sleep(5)
 
         self.stop()
@@ -558,11 +558,11 @@ class FillDrivenGrid:
                 self.cfg["symbol"], self.cfg["exchange"], self.cfg["currency"],
             )
             self.ib.qualifyContracts(self.contract)
-            logger.info(f"✅ IBKR 已连接 — 账户: {self.ib.managedAccounts()}")
+            logger.info(f"[OK] IBKR 已连接 — 账户: {self.ib.managedAccounts()}")
         else:
             self.ib = None
             self.contract = None
-            logger.info("🧪 DRY RUN 模式")
+            logger.info("[DRY] DRY RUN 模式")
 
         # 策略初始化 (核心)
         self.trigger_symbols()
@@ -574,7 +574,7 @@ class FillDrivenGrid:
 
     def stop(self):
         """停止策略"""
-        logger.info("⏹ 停止网格策略...")
+        logger.info("[STOP] 停止网格策略...")
         self.running = False
 
         # 打印汇总
@@ -585,7 +585,7 @@ class FillDrivenGrid:
 
         if self.ib and self.ib.isConnected():
             self.ib.disconnect()
-            logger.info("🔌 IBKR 已断开")
+            logger.info("[DISC] IBKR 已断开")
 
         if self.db:
             self.db.close()
@@ -606,7 +606,7 @@ class FillDrivenGrid:
         ).fetchone()[0]
 
         logger.info("=" * 52)
-        logger.info("📊 成交驱动网格 运行汇总")
+        logger.info("[CHART] 成交驱动网格 运行汇总")
         logger.info(f"   总订单: {n_orders}  |  成交笔数: {n_fills}")
         logger.info(f"   已平仓配对: {summary['total_trades']}")
         logger.info(f"   盈利笔数:   {summary['winning_trades']}")
@@ -619,7 +619,7 @@ class FillDrivenGrid:
     #  回调
     # ---------------------------------------------------------------
     def _on_error(self, _req_id, error_code, error_string, *_):
-        logger.error(f"❌ IBKR Error (code={error_code}): {error_string}")
+        logger.error(f"[ERR] IBKR Error (code={error_code}): {error_string}")
 
     def _handle_signal(self, signum, _frame):
         logger.info(f"📥 信号 {signum}, 退出...")
@@ -670,16 +670,22 @@ def run(config_override: dict | None = None, config_file: str | None = None):
         engine.initialize()
         engine.run_forever()
     except Exception as e:
-        logger.exception(f"💥 策略异常退出: {e}")
+        logger.exception(f"[EXCEPT] 策略异常退出: {e}")
         engine.stop()
 
 
+def _setup_logging():
+    """配置日志: 文件 UTF-8, 控制台 GBK 安全"""
+    log_format = "%(asctime)s [%(levelname)s] %(message)s"
+    file_handler = logging.FileHandler("grid_trading.log", encoding="utf-8")
+    file_handler.setFormatter(logging.Formatter(log_format))
+    logging.basicConfig(level=logging.INFO, format=log_format, handlers=[
+        logging.StreamHandler(), file_handler,
+    ])
+
+
 if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-        handlers=[logging.StreamHandler(), logging.FileHandler("grid_trading.log")],
-    )
+    _setup_logging()
 
     # ====== 在这里改配置 ======
     MY_CONFIG = {

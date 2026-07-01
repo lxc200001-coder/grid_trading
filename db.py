@@ -139,13 +139,13 @@ class Database:
         except Exception:
             pass
         self.conn.execute(SCHEMA_SQL)
-        logger.info(f"✅ 数据库已连接: {self.db_path.absolute()}")
+        logger.info(f"[OK] 数据库已连接: {self.db_path.absolute()}")
         return self
 
     def close(self):
         if self.conn:
             self.conn.close()
-            logger.info("🔌 数据库连接已关闭")
+            logger.info("[DISC] 数据库连接已关闭")
 
     def __enter__(self):
         return self.connect()
@@ -174,7 +174,7 @@ class Database:
             cfg.get("status", "ACTIVE"),
             cfg.get("dry_run", True),
         ]).fetchone()[0]
-        logger.info(f"💾 策略配置已保存 (id={row})")
+        logger.info(f"[SAVE] 策略配置已保存 (id={row})")
         return row
 
     def update_config_status(self, config_id: int, status: str):
@@ -331,12 +331,12 @@ class Database:
     def export_to_csv(self, table: str, output_path: str):
         """导出表到 CSV"""
         self.conn.execute(f"COPY {table} TO '{output_path}' (HEADER, DELIMITER ',')")
-        logger.info(f"📤 {table} 已导出到 {output_path}")
+        logger.info(f"[SEND] {table} 已导出到 {output_path}")
 
     def export_to_parquet(self, table: str, output_path: str):
         """导出表到 Parquet（压缩率更高）"""
         self.conn.execute(f"COPY {table} TO '{output_path}' (FORMAT PARQUET)")
-        logger.info(f"📤 {table} 已导出到 {output_path}")
+        logger.info(f"[SEND] {table} 已导出到 {output_path}")
 
 
 if __name__ == "__main__":
@@ -344,7 +344,7 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
     db = Database("test_grid.db")
     db.connect()
-    print("✅ Schema 创建成功")
+    print("[OK] Schema 创建成功")
     print("表列表:", db.conn.execute(
         "SELECT table_name FROM information_schema.tables WHERE table_schema = 'main'"
     ).fetchdf())
